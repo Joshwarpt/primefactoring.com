@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Factoring with a pulse comb</title>
+<style>
+:root{--bg:#eef1f6;--panel:#fff;--ink:#14213d;--mute:#5a6785;--line:#d3d9e6;--base:#0a7ea4;--peak:#c2185b;--ghost:#d98200;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1424;--panel:#161d33;--ink:#e6ebf7;--mute:#9aa6c4;--line:#2a3452;--base:#4cc3e8;--peak:#ff5c9a;--ghost:#ffb02e;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e1424;--panel:#161d33;--ink:#e6ebf7;--mute:#9aa6c4;--line:#2a3452;--base:#4cc3e8;--peak:#ff5c9a;--ghost:#ffb02e;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:940px;margin:0 auto;padding:20px 16px 48px}
+h1{font:600 clamp(26px,5vw,38px)/1.15 "Iowan Old Style","Palatino Linotype",Georgia,serif;margin:8px 0 6px;letter-spacing:-.01em}
+h2{font:600 19px/1.3 "Iowan Old Style","Palatino Linotype",Georgia,serif;margin:0 0 8px}
+p{margin:0 0 10px;max-width:72ch}
+.lead{color:var(--mute);font-size:17px;margin-bottom:18px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
+.row{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:end}
+label{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--mute)}
+input[type=number],select{font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);width:130px}
+input[type=range]{width:190px;accent-color:var(--peak)}
+button{font:inherit;font-size:14px;padding:7px 12px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);cursor:pointer}
+button:hover{border-color:var(--peak)}
+button.go{background:var(--peak);border-color:var(--peak);color:#fff}
+:focus-visible{outline:2px solid var(--peak);outline-offset:2px}
+.pre{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;align-items:center;font-size:14px;color:var(--mute)}
+canvas{display:block;width:100%}
+.mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,Menlo,Consolas,monospace}
+#status{font-size:18px;margin-bottom:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:3px 10px;border-radius:99px;border:1px solid var(--peak);color:var(--peak);font-size:14px}
+.chip.g{border-color:var(--ghost);color:var(--ghost)}
+.two{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:16px;align-items:start}
+@media(max-width:680px){.two{grid-template-columns:1fr}}
+.key{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:13px;color:var(--mute);margin-top:6px}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.note{font-size:15px;color:var(--mute)}
+</style>
+</head>
+<body>
+<main>
+<h1>Factoring with a pulse comb</h1>
+<p class="lead">A train of phase-shifted light pulses is added up by interference. The sum is bright only when the trial divisor l divides N, so the bright lines of the spectrum are the factors.</p>
+
+<section class="panel">
+ <div class="row">
+  <label>Number N (any size, up to 2000 digits)<input id="n" type="text" inputmode="numeric" value="15251" style="width:min(420px,80vw)"></label>
+  <label>Scan l up to<input id="cap" type="number" min="100" max="200000" value="20000"></label>
+  <label>Pulses in the comb: <span id="mv" class="mono">9</span><input id="m" type="range" min="3" max="40" value="8"></label>
+  <label>Pulse phase noise: <span id="sv" class="mono">0.00 rad</span><input id="s" type="range" min="0" max="150" value="0"></label>
+  <label>Phase pattern<select id="mode"><option value="2">Gauss sum (m²)</option><option value="1">Fourier sum (m)</option></select></label>
+  <button id="rr">Re-roll noise</button>
+ </div>
+ <div class="pre">Try:
+  <button data-n="105">105</button><button data-n="391">391</button><button data-n="4087">4087</button><button data-n="15251">15251</button><button data-n="8191">8191 (prime)</button><button data-n="9973000069811">9973 × 1000000007</button><button data-n="998244359987710471">998244353 × 1000000007</button>
+ </div>
+</section>
+
+<section class="panel">
+ <div id="status"></div>
+ <div id="chips" class="chips"></div>
+ <p id="info" class="note" style="margin:8px 0 0"></p>
+</section>
+
+<section class="panel">
+ <h2>Detector spectrum</h2>
+ <p class="note">Intensity |A(l)|² for every trial divisor l from 2 to N/2. Click the plot to inspect a value of l.</p>
+ <canvas id="spec"></canvas>
+ <div class="key"><span><i class="sw" style="background:var(--base)"></i>dark (cancelled)</span><span><i class="sw" style="background:var(--peak)"></i>bright and a true divisor</span><span><i class="sw" style="background:var(--ghost)"></i>bright but not a divisor (ghost)</span></div>
+</section>
+
+<section class="panel">
+ <h2>One trial divisor, up close</h2>
+ <div class="row" style="margin-bottom:12px">
+  <label>Trial divisor l: <span id="lv" class="mono"></span><input id="l" type="range" min="2" max="100" value="2" style="width:min(420px,80vw)"></label>
+  <button id="sw" class="go">Sweep l</button>
+ </div>
+ <div class="two">
+  <div><canvas id="ph"></canvas></div>
+  <div>
+   <p id="ro" class="mono"></p>
+   <canvas id="pu"></canvas>
+   <p class="note" style="margin-top:6px">Left: each pulse adds one unit step to the total field, drawn tip to tail. Right: the colour of each pulse is its phase at the detector. A divisor makes every pulse the same colour and the steps line up in a straight line.</p>
+  </div>
+ </div>
+</section>
+
+<section class="panel">
+ <h2>Frequency view, out to infinity</h2>
+ <p class="note">Write u = N/l, so the scanned frequency is proportional to 1/l. The comb’s spectrum is periodic in u with period 1: bright teeth sit at every whole number, with smaller fractional revivals between them. Dashed lines mark where the selected l lands in each period.</p>
+ <label>Periods shown: <span id="kv" class="mono">4</span><input id="k" type="range" min="1" max="12" value="4"></label>
+ <canvas id="fq"></canvas>
+ <p id="fr" class="mono"></p>
+ <p class="note">Past the last period the pattern repeats exactly, so going to infinite frequency adds no new information: l is a factor exactly when u = N/l falls on a tooth. A real comb has finite bandwidth, so this endless repetition is the mathematical limit, not something hardware reaches.</p>
+</section>
+
+<section class="panel">
+ <h2>The physics in three steps</h2>
+ <p>1. A pulse shaper delays pulse m so that its phase at the detector is 2π·m²·N/l. In real experiments the scan over l is done by tuning the optical frequency or the delays.</p>
+ <p>2. The detector adds the fields of all pulses: A(l) = (1/(M+1)) Σ exp(−2πi·m²·N/l). This is ordinary wave addition, and the page computes exactly this sum.</p>
+ <p>3. If l divides N, N/l is a whole number, every phase is a multiple of 2π, and all pulses arrive in step (|A|² = 1). Otherwise the phases scatter and the pulses largely cancel.</p>
+ <p class="note">Limits worth seeing for yourself: with few pulses, ghost factors appear; with phase noise, real peaks sink below the threshold. The pulse count and timing precision must grow with the size of N, so this is a demonstrator for small numbers and no threat to RSA. Similar experiments with femtosecond pulse trains have factored numbers such as 15251.</p>
+</section>
+</main>
+
+<script>
+const $=id=>document.getElementById(id), THR=0.5;
+let NB=15251n,Ns="15251",NM=null,CAP=20000,winCut=false,M=8,sig=0,mode=2,sel=2,L=0,P=null,jit=[],raf=0;
+const sh=s=>s.length>40?s.slice(0,16)+"…"+s.slice(-16)+" ("+s.length+" digits)":s;
+const cv=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const gauss=()=>Math.sqrt(-2*Math.log(1-Math.random()))*Math.cos(2*Math.PI*Math.random());
+const reroll=()=>{jit=Array.from({length:61},gauss)};
+const ph=(l,m)=>{const k=mode===2?m*m:m;return -2*Math.PI*((k*NM[l])%l)/l+sig*jit[m]};
+function amp(l){let r=0,i=0;for(let m=0;m<=M;m++){const p=ph(l,m);r+=Math.cos(p);i+=Math.sin(p)}return[r/(M+1),i/(M+1)]}
+function fit(c,h){const d=window.devicePixelRatio||1,w=c.clientWidth;c.width=Math.round(w*d);c.height=Math.round(h*d);c.style.height=h+"px";const x=c.getContext("2d");x.setTransform(d,0,0,d,0,0);return[x,w,h]}
+
+function compute(){
+ const half=NB/2n;winCut=half>BigInt(CAP);L=Number(winCut?BigInt(CAP):half);NM=new Uint32Array(L+1);for(let l=2;l<=L;l++)NM[l]=Number(NB%BigInt(l));P=new Float32Array(L+1);
+ for(let l=2;l<=L;l++){const[r,i]=amp(l);P[l]=r*r+i*i}
+ const found=[];for(let l=2;l<=L;l++)if(P[l]>=THR)found.push(l);
+ const real=found.filter(l=>NM[l]===0),ghost=found.filter(l=>NM[l]!==0);
+ const st=$("status"),ch=$("chips");ch.innerHTML="";
+ if(real.length){
+  const pairs=real.filter(l=>BigInt(l)*BigInt(l)<=NB).map(l=>l+" × "+sh((NB/BigInt(l)).toString()));
+  st.textContent="Bright lines found. "+sh(Ns)+" = "+pairs.join(" or ")+".";
+  real.forEach(l=>{const s=document.createElement("span");s.className="chip mono";s.textContent="l = "+l;ch.appendChild(s)});
+ }else{
+  st.textContent=winCut?"No bright lines for l up to "+L+". N may be prime, or its factors are larger than the scan limit.":"No bright lines above the threshold. "+sh(Ns)+" looks prime, or noise and too few pulses hid the factors.";
+ }
+ if(ghost.length){const s=document.createElement("span");s.className="chip g mono";s.textContent=ghost.length+" ghost line"+(ghost.length>1?"s":"")+(ghost.length<=4?" at l = "+ghost.join(", "):"");ch.appendChild(s)}
+ let d=0;for(let l=2;l<=L;l++)if(NM[l]===0){d=l;break}
+ $("info").textContent="N has "+Ns.length+" digits. Scanned l = 2 to "+L+(winCut?" (the scan limit; covering every l up to N/2 is out of reach).":" (every l up to N/2).")+" Setting the pulse phases needs timing precision near 10^-"+Ns.length+", while the best optical clocks reach roughly 10^-19.";
+ setSel(d||Math.min(2,L),true);
+ drawSpec();
+}
+
+function setSel(l,fromCompute){
+ sel=Math.max(2,Math.min(L,l));const s=$("l");
+ if(fromCompute){s.max=L}
+ s.value=sel;$("lv").textContent=sel;drawDyn();
+ if(!fromCompute)drawSpec();
+}
+
+function drawSpec(){
+ const[x,w,h]=fit($("spec"),230),pad=34,pb=24,pw=w-pad-8,phh=h-pb-10;
+ const bm=new Float32Array(pw+1),bk=new Uint8Array(pw+1),den=Math.max(1,L-2);
+ for(let l=2;l<=L;l++){const b=Math.floor((l-2)/den*pw),v=P[l];if(v>bm[b])bm[b]=v;if(v>=THR){const k=NM[l]===0?1:2;if(bk[b]===0||k===1)bk[b]=k}}
+ const mute=cv("--mute"),line=cv("--line");
+ x.font="12px system-ui,sans-serif";x.fillStyle=mute;x.strokeStyle=line;x.lineWidth=1;
+ [0,.5,1].forEach(v=>{const y=10+phh*(1-v);x.beginPath();x.moveTo(pad,y);x.lineTo(w-8,y);x.stroke();x.textAlign="right";x.fillText(v.toFixed(1),pad-6,y+4)});
+ for(let b=0;b<=pw;b++){
+  const bh=bm[b]*phh,k=bk[b];
+  x.fillStyle=k===1?cv("--peak"):k===2?cv("--ghost"):cv("--base");
+  x.fillRect(pad+b-(k?1:0),10+phh-bh,k?3:1,Math.max(bh,1));
+ }
+ x.setLineDash([4,4]);x.strokeStyle=mute;const ty=10+phh*(1-THR);x.beginPath();x.moveTo(pad,ty);x.lineTo(w-8,ty);x.stroke();x.setLineDash([]);
+ const sx=pad+(sel-2)/den*pw;x.strokeStyle=cv("--ink");x.beginPath();x.moveTo(sx,10);x.lineTo(sx,10+phh);x.stroke();
+ x.fillStyle=mute;x.textAlign="left";x.fillText("l = 2",pad,h-6);x.textAlign="right";x.fillText("l = "+L+(winCut?" (scan limit)":" = N/2"),w-8,h-6);
+}
+
+function drawDyn(){
+ const l=sel,[ar,ai]=amp(l),I=ar*ar+ai*ai,mute=cv("--mute"),line=cv("--line");
+ let c=$("ph");const side=Math.min(c.clientWidth,300);
+ const[x,w]=fit(c,side),cx=w/2,cy=side/2,R=side/2-14;
+ x.strokeStyle=line;x.lineWidth=1;x.beginPath();x.arc(cx,cy,R,0,7);x.stroke();
+ x.beginPath();x.moveTo(cx-R,cy);x.lineTo(cx+R,cy);x.moveTo(cx,cy-R);x.lineTo(cx,cy+R);x.stroke();
+ let px=0,py=0;x.strokeStyle=cv("--base");x.lineWidth=2;x.beginPath();x.moveTo(cx,cy);
+ for(let m=0;m<=M;m++){const p=ph(l,m);px+=Math.cos(p)/(M+1);py+=Math.sin(p)/(M+1);x.lineTo(cx+px*R,cy-py*R)}
+ x.stroke();x.fillStyle=cv("--peak");x.beginPath();x.arc(cx+px*R,cy-py*R,5,0,7);x.fill();
+ x.fillStyle=mute;x.font="12px system-ui,sans-serif";x.textAlign="left";x.fillText("sum of fields (unit circle = all in step)",6,12);
+ const div=NM[l]===0;
+ $("ro").textContent="l = "+l+": "+(div?"divides N (N/l = "+sh((NB/BigInt(l)).toString())+")":"does not divide N")+", |A|² = "+I.toFixed(3);
+ const[y,w2,h2]=fit($("pu"),80),bw=w2/(M+1);
+ for(let m=0;m<=M;m++){const p=((ph(l,m)%(2*Math.PI))+2*Math.PI)%(2*Math.PI);y.fillStyle="hsl("+Math.round(p/(2*Math.PI)*360)+",70%,55%)";y.fillRect(m*bw+1,8,Math.max(bw-2,1),h2-16)}
+ drawFreq();
+}
+
+let K=4;
+function ampU(u){let r=0,i=0;for(let m=0;m<=M;m++){const k=mode===2?m*m:m,p=-2*Math.PI*((k*u)%1)+sig*jit[m];r+=Math.cos(p);i+=Math.sin(p)}return(r*r+i*i)/((M+1)*(M+1))}
+function drawFreq(){
+ const[x,w,h]=fit($("fq"),210),pad=34,pb=24,top=18,pw=w-pad-8,phh=h-pb-top,mute=cv("--mute"),line=cv("--line");
+ x.font="12px system-ui,sans-serif";x.fillStyle=mute;x.strokeStyle=line;x.lineWidth=1;
+ [0,1].forEach(v=>{const y=top+phh*(1-v);x.beginPath();x.moveTo(pad,y);x.lineTo(w-8,y);x.stroke();x.textAlign="right";x.fillText(v,pad-6,y+4)});
+ for(let j=0;j<=K;j++){const gx=pad+j/K*pw;x.beginPath();x.moveTo(gx,top);x.lineTo(gx,top+phh);x.stroke();x.textAlign="center";x.fillText(j,gx,h-6)}
+ x.strokeStyle=cv("--base");x.lineWidth=1.5;x.beginPath();
+ for(let px=0;px<=pw;px++){let v=0;for(let s=0;s<4;s++){const a=ampU((px+s/4)/pw*K);if(a>v)v=a}const yy=top+phh*(1-v);px?x.lineTo(pad+px,yy):x.moveTo(pad,yy)}
+ x.stroke();
+ const f=NM[sel]/sel,u=f;
+ x.setLineDash([4,4]);x.strokeStyle=cv("--peak");for(let j=0;j<K;j++){const gx=pad+(j+f)/K*pw;x.beginPath();x.moveTo(gx,top);x.lineTo(gx,top+phh);x.stroke()}x.setLineDash([]);
+ x.fillStyle=mute;x.textAlign="right";x.fillText("u = N/l, continuing to infinity",w-8,12);
+ $("fr").textContent="At l = "+sel+": N/l has fractional part "+f.toFixed(3)+", |A|² = "+ampU(u).toFixed(3)+(NM[sel]===0?" (on a tooth, so l is a divisor)":" (between teeth)");
+}
+$("k").oninput=e=>{K=+e.target.value;$("kv").textContent=K;drawFreq()};
+
+function readN(){let s=($("n").value||"").replace(/[^0-9]/g,"").replace(/^0+/,"");if(s.length>2000)s=s.slice(0,2000);if(!s||BigInt(s)<4n)s="4";$("n").value=s;Ns=s;NB=BigInt(s);CAP=Math.min(200000,Math.max(100,Math.round(+$("cap").value)||20000));compute()}
+$("n").addEventListener("change",readN);$("cap").addEventListener("change",readN);
+document.querySelectorAll("[data-n]").forEach(b=>b.onclick=()=>{$("n").value=b.dataset.n;readN()});
+$("m").oninput=e=>{M=+e.target.value;$("mv").textContent=M+1;compute()};
+$("s").oninput=e=>{sig=e.target.value/100;$("sv").textContent=sig.toFixed(2)+" rad";compute()};
+$("mode").onchange=e=>{mode=+e.target.value;compute()};
+$("rr").onclick=()=>{reroll();compute()};
+$("l").oninput=e=>{cancelAnimationFrame(raf);setSel(+e.target.value)};
+$("spec").addEventListener("click",e=>{const r=e.target.getBoundingClientRect(),pad=34,pw=r.width-pad-8;const f=Math.min(1,Math.max(0,(e.clientX-r.left-pad)/pw));cancelAnimationFrame(raf);setSel(2+Math.round(f*Math.max(1,L-2)))});
+$("sw").onclick=()=>{cancelAnimationFrame(raf);let l=2;const step=Math.max(1,Math.ceil(L/400));(function go(){setSel(l);l+=step;if(l<=L)raf=requestAnimationFrame(go)})()};
+let rt;addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(()=>{drawSpec();drawDyn()},120)});
+matchMedia("(prefers-color-scheme:dark)").addEventListener("change",()=>{drawSpec();drawDyn()});
+reroll();compute();
+</script>
+</body>
+</html>
